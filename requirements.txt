@@ -1,0 +1,6 @@
+flask
+google-genai
+chromadb
+PyPDF2
+python-dotenv
+
