@@ -275,6 +275,59 @@ def ask():
         "sources": [m["metadata"]["source"] for m in result["matches"]]
     })
 
+@app.route('/check_code', methods=['POST'])
+def check_code():
+    data = request.json
+    code = data.get("code", "").strip()
+
+    if not code:
+        return jsonify({"error": "Code is required"}), 400
+
+    # System instruction specialized for LAW/REGULATION/SECURITY checking
+    system_prompt = """
+        You are an automated Code Compliance Auditor.
+        
+        Your job:
+        - Analyze any source code provided.
+        - Identify violations in: legal compliance, licensing, data protection laws, cybersecurity regulations, OWASP rules, GDPR risks, unsafe patterns, bad practices, copyright issues, insecure coding flaws.
+        - Be strict and explicit.
+        - Provide detailed reasoning for every issue.
+        - If code is safe, respond clearly: "No violations found."
+        """
+
+    messages = [
+        {"role": "system", "content": system_prompt},
+        {"role": "user", "content": f"Analyze the following code for any violations:\n\n{code}\n\nExplain the findings clearly."}
+    ]
+
+    payload = {
+        "model": "openai/gpt-oss-120b",
+        "messages": messages,
+        "temperature": 0,
+        "max_completion_tokens": 4096,
+        "top_p": 1,
+        "stream": False,
+        "reasoning_effort": "medium"
+    }
+
+    headers = {
+        "Authorization": f"Bearer {GROK_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    try:
+        response = requests.post(API_URL, headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
+        answer_text = data["choices"][0]["message"]["content"]
+    except Exception as e:
+        return jsonify({"error": f"Groq API request failed: {e}"}), 500
+
+    return jsonify({
+        "analysis": answer_text
+    })
+
+
 @app.route('/')
 def home():
     return "Chat with your PDF API (Pinecone version) is running!"
