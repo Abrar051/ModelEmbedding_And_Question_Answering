@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, Response
 from google.genai import Client
 import pinecone
 from google.genai.errors import ClientError
@@ -10,6 +10,7 @@ import re
 import unicodedata
 import os
 import requests
+import json
 
 load_dotenv()
 
@@ -327,6 +328,170 @@ def check_code():
         "analysis": answer_text
     })
 
+## Stream analysis from vs code
+def stream_groq(messages):
+    headers = {
+        "Authorization": f"Bearer {GROK_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": "openai/gpt-oss-120b",
+        "messages": messages,
+        "temperature": 0,
+        "stream": True
+    }
+
+    with requests.post(API_URL, headers=headers, json=payload, stream=True) as r:
+        for chunk in r.iter_lines():
+            if chunk:
+                yield f"data: {chunk.decode()}\n\n"
+
+
+# -------------------------
+# MAIN ANALYSIS ENDPOINT
+# -------------------------
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    """
+    Input:
+    {
+        "code": "<entire file code>",
+        "language": "python/javascript/etc"
+    }
+
+    Output:
+    {
+        "analysis": "...full AI explanation...",
+        "issues": [
+            {
+                "line": 12,
+                "severity": "high",
+                "message": "Possible GDPR violation...",
+                "suggestion": "Mask user identifiers...",
+                "range": [start_col, end_col]
+            }
+        ]
+    }
+    """
+
+    data = request.json
+    code = data.get("code", "")
+    language = data.get("language", "unknown")
+
+    if not code:
+        return jsonify({"error": "Code text is required"}), 400
+
+    # ---------------------
+    # SYSTEM INSTRUCTION
+    # ---------------------
+    system_message = """
+        You are an AI code compliance auditor.  
+        Your job is to scan the provided code and flag violations related to:
+        
+        - Legal requirements  
+        - Privacy laws (GDPR, HIPAA, COPPA, etc.)  
+        - Licensing conflicts  
+        - Security vulnerabilities  
+        - Unsafe data handling  
+        - Risky APIs  
+        - Encryption issues  
+        - Logging of sensitive data  
+        
+        RETURN RESULTS IN THIS JSON FORMAT STRICTLY:
+        
+        {
+         "analysis": "<full text>",
+         "issues": [
+            {
+             "line": <line_number>,
+             "severity": "low/medium/high",
+             "message": "<short description>",
+             "suggestion": "<fix suggestion>",
+             "range": [start_col, end_col]
+            }
+         ]
+        }
+        
+        If no issues are found, return an empty array for "issues".
+        """
+
+    user_message = f"""
+        Language: {language}
+        
+        Code to analyze:
+        ----------------
+        {code}
+        """
+
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": user_message},
+    ]
+
+    headers = {
+        "Authorization": f"Bearer {GROK_API_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "model": "openai/gpt-oss-120b",
+        "messages": messages,
+        "temperature": 0,
+        "stream": False
+    }
+
+    try:
+        r = requests.post(API_URL, headers=headers, json=payload)
+        r.raise_for_status()
+        result = r.json()
+
+        ai_response = result["choices"][0]["message"]["content"]
+
+        # Try parsing JSON from AI
+        try:
+            parsed = json.loads(ai_response)
+            return jsonify(parsed)
+        except:
+            return jsonify({
+                "analysis": ai_response,
+                "issues": []
+            })
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+# STREAMING ENDPOINT
+
+
+@app.route('/stream_analysis', methods=['POST'])
+def stream_analysis():
+    data = request.json
+    code = data.get("code", "")
+    language = data.get("language", "")
+
+    if not code:
+        return jsonify({"error": "Code is required"}), 400
+
+    system_message = """
+        You are an AI code compliance auditor. Stream your analysis progressively.
+        """
+
+    user_message = f"Analyze this {language} code:\n{code}"
+
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": user_message},
+    ]
+
+    return Response(stream_groq(messages), mimetype='text/event-stream')
+
+
+##
+
 
 @app.route('/')
 def home():
@@ -335,4 +500,11 @@ def home():
 
 # ---------------- Run Flask ----------------
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(
+        host="localhost",
+        port=5000,
+        debug=True,
+        ssl_context=('certs/cert.pem', 'certs/key.pem')  # Enable HTTPS
+    )
+
+
