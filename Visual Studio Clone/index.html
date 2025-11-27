@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>AI Code Compliance Scanner</title>
+
+    <!-- Monaco Editor -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+
+    <style>
+        body {
+            margin: 0;
+            background: #1e1e1e;
+            color: white;
+            font-family: sans-serif;
+        }
+        #editor-container {
+            width: 100vw;
+            height: 90vh;
+        }
+        #controls {
+            padding: 10px;
+            background: #252526;
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 8px 15px;
+            background: #007acc;
+            border: none;
+            color: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+    </style>
+</head>
+<body>
+
+<div id="controls">
+    <button onclick="runScan()">🔍 Scan Code</button>
+</div>
+
+<div id="editor-container"></div>
+
+<script src="app.js"></script>
+
+</body>
+</html>
