@@ -11,10 +11,13 @@ import unicodedata
 import os
 import requests
 import json
+from flask_cors import CORS
 
 load_dotenv()
 
 app = Flask(__name__)
+CORS(app, resources={r"/*": {"origins": ["http://127.0.0.1:5500"]}})
+
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
@@ -503,8 +506,8 @@ if __name__ == '__main__':
     app.run(
         host="localhost",
         port=5000,
-        debug=True,
-        ssl_context=('certs/cert.pem', 'certs/key.pem')  # Enable HTTPS
+        debug=True
+        #ssl_context=('certs/cert.pem', 'certs/key.pem')  # Enable HTTPS
     )
 
 
